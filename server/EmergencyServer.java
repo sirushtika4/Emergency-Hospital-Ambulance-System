@@ -1,45 +1,51 @@
-import java.io.*;
-import java.net.*;
+package server;
+
+import java.io.IOException;
+import java.net.ServerSocket;
+import java.net.Socket;
 
 public class EmergencyServer {
 
+    private static final int PORT = 5000;
+
     public static void main(String[] args) {
-        int port = 5000;
 
-        try {
-            ServerSocket serverSocket = new ServerSocket(port);
+        System.out.println("====================================");
+        System.out.println(" Emergency Coordination Server");
+        System.out.println("====================================");
 
-            System.out.println("====================================");
-            System.out.println(" Emergency Coordination Server");
-            System.out.println("====================================");
-            System.out.println("Server started on port " + port);
-            System.out.println("Waiting for client connection...");
+        try (ServerSocket serverSocket = new ServerSocket(PORT)) {
 
-            Socket clientSocket = serverSocket.accept();
+            System.out.println("Server started on port " + PORT);
+            System.out.println("Waiting for clients...");
 
-            System.out.println("Client connected!");
-            System.out.println("Client IP: "
-                    + clientSocket.getInetAddress().getHostAddress());
+            while (true) {
 
-            BufferedReader input = new BufferedReader(
-                    new InputStreamReader(clientSocket.getInputStream())
-            );
+                Socket clientSocket = serverSocket.accept();
 
-            PrintWriter output = new PrintWriter(
-                    clientSocket.getOutputStream(),
-                    true
-            );
+                System.out.println("------------------------------------");
+                System.out.println("New client connected");
+                System.out.println(
+                        "Client IP: "
+                        + clientSocket.getInetAddress().getHostAddress()
+                );
 
-            String message = input.readLine();
+                ClientHandler handler =
+                        new ClientHandler(clientSocket);
 
-            System.out.println("Message received: " + message);
+                Thread thread =
+                        new Thread(handler);
 
-            output.println("Server received your message successfully.");
-
-            clientSocket.close();
-            serverSocket.close();
+                thread.start();
+            }
 
         } catch (IOException e) {
+
+            System.out.println(
+                    "Server error: "
+                    + e.getMessage()
+            );
+
             e.printStackTrace();
         }
     }
