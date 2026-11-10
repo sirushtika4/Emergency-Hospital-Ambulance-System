@@ -22,11 +22,15 @@ public class AmbulanceClient {
                     true
             );
 
-            output.println("AMBULANCE: Emergency patient incoming.");
-
-            String response = input.readLine();
-
-            System.out.println("Server response: " + response);
+            System.out.println("Server response: " + input.readLine());
+            String id = args.length > 0 ? args[0] : "AMB001";
+            output.println("AMBULANCE_REGISTER|" + id);
+            String registration = input.readLine();
+            System.out.println("Server response: " + registration);
+            if (("AMBULANCE_REGISTERED|" + id).equals(registration)) {
+                output.println("EMERGENCY_REQUEST|" + id + "|CARDIAC|CRITICAL");
+                System.out.println("Server response: " + input.readLine());
+            }
 
             socket.close();
 
