@@ -32,6 +32,7 @@ public class ClientHandler implements Runnable {
             LOG.log(Level.WARNING, "Socket error for " + socket.getRemoteSocketAddress(), e);
         } finally {
             if (clientId != null) registry.remove(clientId, this);
+            if (router.getEmergencyManager() != null) router.getEmergencyManager().disconnected(this);
             synchronized (sendLock) { output = null; }
             LOG.info("Client disconnected: " + socket.getRemoteSocketAddress());
         }
@@ -55,8 +56,13 @@ public class ClientHandler implements Runnable {
         switch (command) {
             case "AMBULANCE_REGISTER":
             case "HOSPITAL_REGISTER": expected = 2; break;
-            case "BED_UPDATE":
-            case "EMERGENCY_REQUEST": expected = 4; break;
+            case "BED_UPDATE": expected = 4; break;
+            case "EMERGENCY_REQUEST": expected = parts.length == 5 ? 5 : 4; break;
+            case "HOSPITAL_ACCEPT":
+            case "HOSPITAL_REJECT":
+            case "EMERGENCY_CANCEL":
+            case "EMERGENCY_COMPLETE":
+            case "EMERGENCY_STATUS": expected = 3; break;
             default: sendMessage("ERROR|Unknown command"); return;
         }
         if (parts.length != expected) { sendMessage("ERROR|Invalid message format"); return; }
@@ -70,6 +76,19 @@ public class ClientHandler implements Runnable {
                     ? ClientRegistry.Role.AMBULANCE : ClientRegistry.Role.HOSPITAL);
             return;
         }
+        if (expected == 3) {
+            boolean hospitalResponse = command.startsWith("HOSPITAL_");
+            ClientRegistry.Role requiredRole = hospitalResponse
+                    ? ClientRegistry.Role.HOSPITAL : ClientRegistry.Role.AMBULANCE;
+            if (role != requiredRole || !parts[2].equals(clientId)) {
+                sendMessage("ERROR|Unauthorized role or sender ID"); return;
+            }
+            EmergencyManager manager = router.getEmergencyManager();
+            if (manager == null) { sendMessage("ERROR|Assignment service unavailable"); return; }
+            if (hospitalResponse) manager.respond(this, parts[1], parts[2], command.equals("HOSPITAL_ACCEPT"));
+            else manager.ambulanceCommand(this, command, parts[1], parts[2]);
+            return;
+        }
         ClientRegistry.Role required = command.equals("BED_UPDATE")
                 ? ClientRegistry.Role.HOSPITAL : ClientRegistry.Role.AMBULANCE;
         if (role != required || !parts[1].equals(clientId)) {
@@ -80,7 +99,7 @@ public class ClientHandler implements Runnable {
                 int count = Integer.parseInt(parts[3]);
                 if (!parts[3].matches("[0-9]+") || count < 0) throw new NumberFormatException();
                 if (!registry.updateBeds(clientId, this, parts[2], count)) {
-                    sendMessage("ERROR|Hospital registration unavailable"); return;
+                    sendMessage("ERROR|Registration unavailable or count below reserved beds"); return;
                 }
                 LOG.info("Bed availability updated for " + clientId + ": " + parts[2] + "=" + count);
                 sendMessage("BED_UPDATE_RECEIVED");
@@ -89,7 +108,9 @@ public class ClientHandler implements Runnable {
             }
         } else {
             LOG.info("Emergency request received from " + clientId);
-            router.routeEmergency(this, clientId, parts[2], parts[3]);
+            if (parts.length == 4) router.routeEmergency(this, clientId, parts[2], parts[3]);
+            else if (router.getEmergencyManager() == null) sendMessage("ERROR|Assignment service unavailable");
+            else router.getEmergencyManager().submit(this, clientId, parts[2], parts[3], parts[4]);
         }
     }
     private void register(String id, ClientRegistry.Role requestedRole) {

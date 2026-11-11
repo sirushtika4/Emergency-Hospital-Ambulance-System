@@ -5,7 +5,13 @@ import java.util.logging.Logger;
 public class MessageRouter {
     private static final Logger LOG = Logger.getLogger(MessageRouter.class.getName());
     private final ClientRegistry registry;
-    public MessageRouter(ClientRegistry registry) { this.registry = registry; }
+    private final EmergencyManager emergencies;
+    public MessageRouter(ClientRegistry registry) { this(registry, null); }
+    public MessageRouter(ClientRegistry registry, EmergencyManager emergencies) {
+        this.registry = registry;
+        this.emergencies = emergencies;
+    }
+    public EmergencyManager getEmergencyManager() { return emergencies; }
     public void routeEmergency(ClientHandler sender, String id, String type, String priority) {
         Set<ClientHandler> recipients = Collections.newSetFromMap(new IdentityHashMap<>());
         recipients.addAll(registry.getHospitals().values());
